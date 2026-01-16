@@ -45,10 +45,10 @@ interface Particle {
 // =============================================================================
 // CONSTANTS
 // =============================================================================
-const GRID_SIZE = 30;
+const GRID_SIZE = 60;
 const TILE_WIDTH = 64;
 const TILE_HEIGHT = 32;
-const STARTING_MONEY = 50000;
+const STARTING_MONEY = 100000;
 
 const THEMES: Theme[] = [
   { id: 'cyberpunk', name: 'Cyberpunk City', path: '/assets/cyberpunk_city_Cyberpunk_City/assets' },
