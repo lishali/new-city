@@ -213,6 +213,7 @@ export default function Game() {
 
   // Camera state
   const [camera, setCamera] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [cameraStart, setCameraStart] = useState({ x: 0, y: 0 });
@@ -276,11 +277,11 @@ export default function Game() {
   // Calculate offsets
   const getOffsets = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return { offsetX: 0, offsetY: 0 };
+    if (!canvas) return { offsetX: 0, offsetY: 0, zoom: 1 };
     const offsetX = canvas.width / 2 + camera.x;
     const offsetY = 100 + camera.y;
-    return { offsetX, offsetY };
-  }, [camera]);
+    return { offsetX, offsetY, zoom };
+  }, [camera, zoom]);
 
   // Check if a building can be placed at position
   const canPlace = useCallback((x: number, y: number, size: number): boolean => {
@@ -301,7 +302,7 @@ export default function Game() {
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx || !spritesLoaded) return;
 
-    const { offsetX, offsetY } = getOffsets();
+    const { offsetX, offsetY, zoom: currentZoom } = getOffsets();
     const now = Date.now();
 
     // Clear canvas with gradient
@@ -311,13 +312,16 @@ export default function Game() {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw tiles in isometric order
+    // Apply zoom transform
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(currentZoom, currentZoom);
+    ctx.translate(-canvas.width / 2, -canvas.height / 2);
+
+    // First pass: Draw all grass tiles
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
-        const tile = grid[y][x];
         const { screenX, screenY } = gridToScreen(x, y, offsetX, offsetY);
-
-        // Draw grass base
         const grassSprite = sprites['grass'];
         if (grassSprite) {
           const scale = 0.35;
@@ -327,51 +331,14 @@ export default function Game() {
           const drawY = screenY - drawHeight / 2 + TILE_HEIGHT / 2;
           ctx.drawImage(grassSprite, drawX, drawY, drawWidth, drawHeight);
         }
+      }
+    }
 
-        // Draw building (only on parent tile to avoid duplicates)
-        if (tile.building !== 'grass' && tile.building !== 'empty' && !tile.occupied) {
-          const buildingSprite = sprites[tile.building];
-          if (buildingSprite) {
-            // Get building size from tools
-            const tool = TOOLS.find(t => t.type === tile.building);
-            const buildingSize = tool?.size || 2;
+    // Second pass: Draw hover highlights
+    for (let y = 0; y < GRID_SIZE; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        const { screenX, screenY } = gridToScreen(x, y, offsetX, offsetY);
 
-            // Calculate animation offset (drop-in effect)
-            let animOffset = 0;
-            let animScale = 1;
-            if (tile.placedAt) {
-              const elapsed = now - tile.placedAt;
-              if (elapsed < 300) {
-                const progress = elapsed / 300;
-                // Bounce easing
-                const bounce = Math.sin(progress * Math.PI) * (1 - progress);
-                animOffset = -50 * (1 - progress) - bounce * 20;
-                animScale = 0.8 + 0.2 * progress + bounce * 0.1;
-              }
-            }
-
-            // Scale based on building size: 1x1=0.3, 2x2=0.45, 3x3=0.65
-            const baseScale = 0.2 + (buildingSize * 0.15);
-            const scale = baseScale * animScale;
-            const drawWidth = buildingSprite.width * scale;
-            const drawHeight = buildingSprite.height * scale;
-
-            // Center building on its footprint
-            const centerOffset = (buildingSize - 1) / 2;
-            const centerX = x + centerOffset;
-            const centerY = y + centerOffset;
-            const { screenX: buildingScreenX, screenY: buildingScreenY } = gridToScreen(centerX, centerY, offsetX, offsetY);
-
-            const drawX = buildingScreenX - drawWidth / 2;
-            const drawY = buildingScreenY - drawHeight + TILE_HEIGHT + animOffset;
-
-            ctx.globalAlpha = tile.placedAt && (now - tile.placedAt < 300) ? 0.7 + 0.3 * ((now - tile.placedAt) / 300) : 1;
-            ctx.drawImage(buildingSprite, drawX, drawY, drawWidth, drawHeight);
-            ctx.globalAlpha = 1;
-          }
-        }
-
-        // Highlight hovered tiles (show building footprint)
         if (hoveredTile && selectedTool.type !== 'bulldoze') {
           const size = selectedTool.size;
           const isInFootprint = x >= hoveredTile.x && x < hoveredTile.x + size &&
@@ -391,7 +358,6 @@ export default function Game() {
             ctx.stroke();
           }
         } else if (hoveredTile && hoveredTile.x === x && hoveredTile.y === y) {
-          // Bulldoze highlight - single tile
           ctx.fillStyle = 'rgba(255, 100, 100, 0.3)';
           ctx.beginPath();
           ctx.moveTo(screenX, screenY);
@@ -402,6 +368,73 @@ export default function Game() {
           ctx.fill();
         }
       }
+    }
+
+    // Collect all buildings for depth sorting
+    const buildings: Array<{
+      x: number;
+      y: number;
+      size: number;
+      type: BuildingType;
+      placedAt?: number;
+      depth: number;
+    }> = [];
+
+    for (let y = 0; y < GRID_SIZE; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        const tile = grid[y][x];
+        if (tile.building !== 'grass' && tile.building !== 'empty' && !tile.occupied) {
+          const tool = TOOLS.find(t => t.type === tile.building);
+          const size = tool?.size || 1;
+          // Depth is based on the front-most corner of the building (x + size + y + size)
+          const depth = (x + size) + (y + size);
+          buildings.push({ x, y, size, type: tile.building, placedAt: tile.placedAt, depth });
+        }
+      }
+    }
+
+    // Sort by depth (back to front)
+    buildings.sort((a, b) => a.depth - b.depth);
+
+    // Third pass: Draw buildings in depth order
+    for (const building of buildings) {
+      const buildingSprite = sprites[building.type];
+      if (!buildingSprite) continue;
+
+      // Calculate animation
+      let animOffset = 0;
+      let animScale = 1;
+      let animAlpha = 1;
+      if (building.placedAt) {
+        const elapsed = now - building.placedAt;
+        if (elapsed < 300) {
+          const progress = elapsed / 300;
+          const bounce = Math.sin(progress * Math.PI) * (1 - progress);
+          animOffset = -50 * (1 - progress) - bounce * 20;
+          animScale = 0.8 + 0.2 * progress + bounce * 0.1;
+          animAlpha = 0.7 + 0.3 * progress;
+        }
+      }
+
+      // Scale based on size - all buildings use same base, size determines footprint
+      const baseScale = 0.35;
+      const sizeMultiplier = building.size * 0.9; // Scale up for larger buildings
+      const scale = baseScale * sizeMultiplier * animScale;
+      const drawWidth = buildingSprite.width * scale;
+      const drawHeight = buildingSprite.height * scale;
+
+      // Anchor at the front corner of the footprint (bottom-most in isometric view)
+      // Front corner is at (x + size - 1, y + size - 1)
+      const frontX = building.x + building.size - 1;
+      const frontY = building.y + building.size - 1;
+      const { screenX: anchorX, screenY: anchorY } = gridToScreen(frontX + 0.5, frontY + 0.5, offsetX, offsetY);
+
+      const drawX = anchorX - drawWidth / 2;
+      const drawY = anchorY - drawHeight + TILE_HEIGHT / 2 + animOffset;
+
+      ctx.globalAlpha = animAlpha;
+      ctx.drawImage(buildingSprite, drawX, drawY, drawWidth, drawHeight);
+      ctx.globalAlpha = 1;
     }
 
     // Draw particles
@@ -422,6 +455,9 @@ export default function Game() {
 
       return true;
     });
+
+    // Restore canvas state (undo zoom transform)
+    ctx.restore();
 
     // Continue animation if there are particles or recent placements
     if (particlesRef.current.length > 0 || grid.some(row => row.some(t => t.placedAt && now - t.placedAt < 300))) {
@@ -489,6 +525,12 @@ export default function Game() {
   };
 
   const handleMouseUp = () => setIsDragging(false);
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setZoom(z => Math.min(3, Math.max(0.3, z * delta)));
+  };
 
   const handleClick = async (e: React.MouseEvent) => {
     await initSound();
@@ -617,17 +659,25 @@ export default function Game() {
           <div className="amount">${money.toLocaleString()}</div>
         </div>
 
-        <div className="theme-selector">
-          <label htmlFor="theme">Theme</label>
-          <select
-            id="theme"
-            value={selectedTheme.id}
-            onChange={(e) => handleThemeChange(e.target.value)}
-          >
+        <div className="theme-grid">
+          <label>Theme</label>
+          <div className="theme-options">
             {THEMES.map(theme => (
-              <option key={theme.id} value={theme.id}>{theme.name}</option>
+              <button
+                key={theme.id}
+                className={`theme-card ${selectedTheme.id === theme.id ? 'selected' : ''}`}
+                onClick={() => handleThemeChange(theme.id)}
+                title={theme.name}
+              >
+                <img
+                  src={`${theme.path}/house.png`}
+                  alt={theme.name}
+                  className="theme-preview"
+                />
+                <span className="theme-name">{theme.name.split(' ')[0]}</span>
+              </button>
             ))}
-          </select>
+          </div>
         </div>
 
         {Object.entries(toolsByCategory).map(([category, tools]) => (
@@ -663,9 +713,10 @@ export default function Game() {
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           onContextMenu={handleContextMenu}
+          onWheel={handleWheel}
         />
         <div className="instructions">
-          <kbd>Click</kbd> to place · <kbd>Right-drag</kbd> to pan · Buildings are <strong>2×2</strong>
+          <kbd>Click</kbd> place · <kbd>Right-drag</kbd> pan · <kbd>Scroll</kbd> zoom
         </div>
       </div>
     </div>
