@@ -123,6 +123,9 @@ class SoundManager {
   private synth: Tone.PolySynth | null = null;
   private noiseSynth: Tone.NoiseSynth | null = null;
   private reverb: Tone.Reverb | null = null;
+  private musicSynth: Tone.PolySynth | null = null;
+  private musicLoop: Tone.Loop | null = null;
+  private musicPlaying = false;
 
   async init() {
     if (this.initialized) return;
@@ -143,7 +146,72 @@ class SoundManager {
     }).connect(this.reverb);
     this.noiseSynth.volume.value = -20;
 
+    // Minstrel lute-like synth for background music
+    const musicReverb = new Tone.Reverb({ decay: 2.5, wet: 0.4 }).toDestination();
+    this.musicSynth = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: 'triangle' },
+      envelope: { attack: 0.02, decay: 0.4, sustain: 0.2, release: 0.8 }
+    }).connect(musicReverb);
+    this.musicSynth.volume.value = -18;
+
     this.initialized = true;
+  }
+
+  startMusic() {
+    if (!this.musicSynth || this.musicPlaying) return;
+
+    // Medieval/minstrel melody patterns
+    const melodies = [
+      ['G4', 'A4', 'B4', 'D5', 'B4', 'A4', 'G4', 'E4'],
+      ['E4', 'G4', 'A4', 'G4', 'E4', 'D4', 'E4', 'G4'],
+      ['D4', 'E4', 'G4', 'A4', 'B4', 'A4', 'G4', 'D4'],
+      ['G4', 'B4', 'D5', 'C5', 'B4', 'A4', 'G4', 'G4'],
+    ];
+    const bassNotes = ['G3', 'E3', 'D3', 'G3'];
+
+    let noteIndex = 0;
+    let melodyIndex = 0;
+
+    this.musicLoop = new Tone.Loop((time) => {
+      const melody = melodies[melodyIndex];
+      const note = melody[noteIndex];
+
+      // Play melody note
+      this.musicSynth?.triggerAttackRelease(note, '8n', time);
+
+      // Play bass on beats 0 and 4
+      if (noteIndex === 0 || noteIndex === 4) {
+        this.musicSynth?.triggerAttackRelease(bassNotes[melodyIndex], '4n', time);
+      }
+
+      noteIndex++;
+      if (noteIndex >= melody.length) {
+        noteIndex = 0;
+        melodyIndex = (melodyIndex + 1) % melodies.length;
+      }
+    }, '8n');
+
+    Tone.getTransport().bpm.value = 100;
+    this.musicLoop.start(0);
+    Tone.getTransport().start();
+    this.musicPlaying = true;
+  }
+
+  stopMusic() {
+    if (this.musicLoop) {
+      this.musicLoop.stop();
+      Tone.getTransport().stop();
+      this.musicPlaying = false;
+    }
+  }
+
+  toggleMusic(): boolean {
+    if (this.musicPlaying) {
+      this.stopMusic();
+    } else {
+      this.startMusic();
+    }
+    return this.musicPlaying;
   }
 
   playPlace(buildingType: string) {
@@ -210,6 +278,7 @@ export default function Game() {
   const [hoveredTile, setHoveredTile] = useState<{ x: number; y: number } | null>(null);
   const [spritesLoaded, setSpritesLoaded] = useState(false);
   const [soundInitialized, setSoundInitialized] = useState(false);
+  const [musicPlaying, setMusicPlaying] = useState(false);
 
   // Camera state
   const [camera, setCamera] = useState({ x: 0, y: 0 });
@@ -658,6 +727,17 @@ export default function Game() {
           <h2>Money</h2>
           <div className="amount">${money.toLocaleString()}</div>
         </div>
+
+        <button
+          className={`music-btn ${musicPlaying ? 'playing' : ''}`}
+          onClick={async () => {
+            await initSound();
+            const isPlaying = soundManager.toggleMusic();
+            setMusicPlaying(isPlaying);
+          }}
+        >
+          {musicPlaying ? '♪ Music On' : '♪ Music Off'}
+        </button>
 
         <div className="theme-grid">
           <label>Theme</label>
