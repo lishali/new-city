@@ -1,0 +1,5 @@
+{
+  "id": "space_colony",
+  "theme": "Space Colony",
+  "prompt": "THEME: Mars/Moon Space Colony\n\nSTYLE:\n- Sci-fi domes, modular habitats, solar panels\n- Orange/red dust (Mars) or grey regolith (Moon)\n- Clean futuristic design, NASA-inspired\n- The Martian / For All Mankind aesthetic\n\nASSET DETAILS:\n- Grass: FLAT rocky Mars surface tile only - dusty red-orange terrain texture, no domes or buildings\n- House: Pressurized habitat module with airlock, round windows\n- Shop: Supply depot with cargo containers, equipment\n- Park: Biodome recreation area with trees, artificial sky\n- University: Research facility with telescope, lab equipment\n- Market: Trading post with landing pads, cargo shuttles"
+}
