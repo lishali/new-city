@@ -324,7 +324,7 @@ export default function Game() {
         const { screenX, screenY } = gridToScreen(x, y, offsetX, offsetY);
         const grassSprite = sprites['grass'];
         if (grassSprite) {
-          const scale = 0.35;
+          const scale = 0.22;
           const drawWidth = grassSprite.width * scale;
           const drawHeight = grassSprite.height * scale;
           const drawX = screenX - drawWidth / 2;
@@ -416,21 +416,21 @@ export default function Game() {
         }
       }
 
-      // Scale based on size - all buildings use same base, size determines footprint
-      const baseScale = 0.35;
-      const sizeMultiplier = building.size * 0.9; // Scale up for larger buildings
+      // Scale building to fit its footprint - larger footprint = slightly larger sprite
+      // Use sqrt to prevent huge visual differences between sizes
+      const baseScale = 0.25;
+      const sizeMultiplier = 1 + (building.size - 1) * 0.3; // 1x1=1.0, 2x2=1.3, 3x3=1.6, 4x4=1.9
       const scale = baseScale * sizeMultiplier * animScale;
       const drawWidth = buildingSprite.width * scale;
       const drawHeight = buildingSprite.height * scale;
 
-      // Anchor at the front corner of the footprint (bottom-most in isometric view)
-      // Front corner is at (x + size - 1, y + size - 1)
-      const frontX = building.x + building.size - 1;
-      const frontY = building.y + building.size - 1;
-      const { screenX: anchorX, screenY: anchorY } = gridToScreen(frontX + 0.5, frontY + 0.5, offsetX, offsetY);
+      // Anchor at the center of the footprint
+      const centerX = building.x + (building.size - 1) / 2;
+      const centerY = building.y + (building.size - 1) / 2;
+      const { screenX: anchorX, screenY: anchorY } = gridToScreen(centerX + 0.5, centerY + 0.5, offsetX, offsetY);
 
       const drawX = anchorX - drawWidth / 2;
-      const drawY = anchorY - drawHeight + TILE_HEIGHT / 2 + animOffset;
+      const drawY = anchorY - drawHeight + TILE_HEIGHT * building.size / 2 + animOffset;
 
       ctx.globalAlpha = animAlpha;
       ctx.drawImage(buildingSprite, drawX, drawY, drawWidth, drawHeight);
