@@ -723,62 +723,81 @@ export default function Game() {
   return (
     <div className="game-container">
       <div className="sidebar">
-        <div className="money-display">
-          <h2>Money</h2>
-          <div className="amount">${money.toLocaleString()}</div>
+        <div className="sidebar-header">
+          <p className="eyebrow">Iso City Builder</p>
+          <h1>New City</h1>
+          <p className="subtitle">Grow a dreamy isometric town with vibes, music, and charm.</p>
         </div>
 
-        <button
-          className={`music-btn ${musicPlaying ? 'playing' : ''}`}
-          onClick={async () => {
-            await initSound();
-            const isPlaying = soundManager.toggleMusic();
-            setMusicPlaying(isPlaying);
-          }}
-        >
-          {musicPlaying ? '♪ Music On' : '♪ Music Off'}
-        </button>
+        <div className="sidebar-scroll">
+          <div className="panel">
+            <div className="money-display">
+              <h2>Balance</h2>
+              <div className="amount">${money.toLocaleString()}</div>
+            </div>
+            <button
+              className={`music-btn ${musicPlaying ? 'playing' : ''}`}
+              onClick={async () => {
+                await initSound();
+                const isPlaying = soundManager.toggleMusic();
+                setMusicPlaying(isPlaying);
+              }}
+            >
+              {musicPlaying ? '♪ Music On' : '♪ Music Off'}
+            </button>
+            <div className="tips">
+              <span>Quick tips</span>
+              <p>Build near parks for cozy neighborhoods and mix shops with houses.</p>
+            </div>
+          </div>
 
-        <div className="theme-grid">
-          <label>Theme</label>
-          <div className="theme-options">
-            {THEMES.map(theme => (
-              <button
-                key={theme.id}
-                className={`theme-card ${selectedTheme.id === theme.id ? 'selected' : ''}`}
-                onClick={() => handleThemeChange(theme.id)}
-                title={theme.name}
-              >
-                <img
-                  src={`${theme.path}/house.png`}
-                  alt={theme.name}
-                  className="theme-preview"
-                />
-                <span className="theme-name">{theme.name.split(' ')[0]}</span>
-              </button>
+          <div className="panel theme-grid">
+            <label>Theme</label>
+            <div className="theme-options">
+              {THEMES.map(theme => (
+                <button
+                  key={theme.id}
+                  className={`theme-card ${selectedTheme.id === theme.id ? 'selected' : ''}`}
+                  onClick={() => handleThemeChange(theme.id)}
+                  title={theme.name}
+                >
+                  <img
+                    src={`${theme.path}/house.png`}
+                    alt={theme.name}
+                    className="theme-preview"
+                  />
+                  <span className="theme-name">{theme.name.split(' ')[0]}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="panel tool-panel">
+            <div className="panel-header">
+              <h2>Build Menu</h2>
+              <span className="panel-meta">{selectedTool.name}</span>
+            </div>
+            {Object.entries(toolsByCategory).map(([category, tools]) => (
+              <div key={category} className="tool-section">
+                <h3>{categoryNames[category]}</h3>
+                {tools.map(tool => (
+                  <button
+                    key={tool.type}
+                    className={`tool-btn ${selectedTool.type === tool.type ? 'selected' : ''} ${tool.type === 'bulldoze' ? 'bulldoze' : ''}`}
+                    onClick={async () => {
+                      await initSound();
+                      setSelectedTool(tool);
+                    }}
+                    disabled={money < tool.cost && tool.type !== 'bulldoze'}
+                  >
+                    <span>{tool.name}</span>
+                    <span className="cost">${tool.cost}{tool.size > 1 ? ` (${tool.size}x${tool.size})` : ''}</span>
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
         </div>
-
-        {Object.entries(toolsByCategory).map(([category, tools]) => (
-          <div key={category} className="tool-section">
-            <h3>{categoryNames[category]}</h3>
-            {tools.map(tool => (
-              <button
-                key={tool.type}
-                className={`tool-btn ${selectedTool.type === tool.type ? 'selected' : ''} ${tool.type === 'bulldoze' ? 'bulldoze' : ''}`}
-                onClick={async () => {
-                  await initSound();
-                  setSelectedTool(tool);
-                }}
-                disabled={money < tool.cost && tool.type !== 'bulldoze'}
-              >
-                <span>{tool.name}</span>
-                <span className="cost">${tool.cost}{tool.size > 1 ? ` (${tool.size}x${tool.size})` : ''}</span>
-              </button>
-            ))}
-          </div>
-        ))}
       </div>
 
       <div className="canvas-container">
